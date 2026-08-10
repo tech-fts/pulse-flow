@@ -1,4 +1,4 @@
-# ⚡ DispatchOS (`dispatch-os`)
+# ⚡ DispatchOS (`pulse-flow`)
 
 > High-Throughput Event-Driven Notification Engine & LLM Digest Pipeline
 
