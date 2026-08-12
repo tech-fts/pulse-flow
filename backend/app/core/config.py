@@ -1,28 +1,35 @@
+from enum import StrEnum
+
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class Environment(StrEnum):
+    DEVELOPMENT = "development"
+    TEST = "test"
+    PRODUCTION = "production"
+
+
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "DispatchOS / PulseFlow"
+    ENVIRONMENT: Environment = Environment.DEVELOPMENT
+    PROJECT_NAME: str = "PulseFlow"
     API_V1_STR: str = "/api/v1"
 
-    # ── PostgreSQL (resolves to Docker Compose service name) ──────
-    POSTGRES_USER: str = "dispatch_user"
-    POSTGRES_PASSWORD: str = "secure_random_db_password"
-    POSTGRES_SERVER: str = "postgres"
-    POSTGRES_PORT: int = 5432
-    POSTGRES_DB: str = "dispatch_os"
-
-    # ── Redis (resolves to Docker Compose service name) ───────────
-    REDIS_URL: str = "redis://redis:6379/0"
-
-    @property
-    def ASYNC_DATABASE_URI(self) -> str:
-        return (
-            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
+    DATABASE_URL: SecretStr
+    REDIS_URL: SecretStr
+    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    MAX_REQUEST_BYTES: int = Field(default=1_048_576, ge=1024, le=10_485_760)
+    WORKER_CONSUMER_PREFIX: str = "dispatch-worker"
+    EVENT_STREAM_MAXLEN: int = Field(default=100_000, ge=1000)
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @model_validator(mode="after")
+    def validate_production(self) -> "Settings":
+        if self.ENVIRONMENT == Environment.PRODUCTION:
+            if not self.CORS_ORIGINS or "*" in self.CORS_ORIGINS:
+                raise ValueError("Use explicit CORS origins in production")
+        return self
 
 
 settings = Settings()

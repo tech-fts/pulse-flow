@@ -1,31 +1,40 @@
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class EventPriority(str, Enum):
+class EventPriority(StrEnum):
     CRITICAL = "critical"
     STANDARD = "standard"
     BULK = "bulk"
 
 
-class EventChannel(str, Enum):
-    Email = "email"
+class EventChannel(StrEnum):
+    EMAIL = "email"
     SMS = "sms"
     PUSH = "push"
     IN_APP = "in_app"
 
 
 class EventIngest(BaseModel):
-    user_id: str = Field(..., description="The ID of the user associated with the event")
-    category: str = Field(..., description="The category of the event")
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str = Field(min_length=1, max_length=128)
+    category: str = Field(min_length=1, max_length=64)
     priority: EventPriority = EventPriority.STANDARD
     channel: EventChannel = EventChannel.SMS
-    payload: dict[str, Any] = Field(..., description="Event payload with relevant data")
+    payload: dict[str, Any]
+
+    @field_validator("payload")
+    @classmethod
+    def payload_must_fit_limit(cls, value: dict[str, Any]) -> dict[str, Any]:
+        if not value:
+            raise ValueError("payload must not be empty")
+        return value
 
 
 class EventResponse(BaseModel):
     event_id: str
     queue: str
-    status: str = Field(default="accepted", frozen=True)
+    status: str = "accepted"

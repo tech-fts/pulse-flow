@@ -1,6 +1,7 @@
 from redis.asyncio import Redis
 
-TOKEN_BUCKET_LUA = """
+# Fixed-window rate limiter (1-second window).  Atomic via Lua.
+FIXED_WINDOW_LUA = """
 local key = KEYS[1]
 local limit = tonumber(ARGV[1])
 local current = tonumber(redis.call("GET", key) or "0")
@@ -16,8 +17,8 @@ else
 end
 """
 
-async def is_rate_limited(redis: Redis, key: str, limit: int = 1000) -> bool:
-    allowed = await redis.eval(TOKEN_BUCKET_LUA, 1, key, limit)
+
+async def check_rate_limit(redis: Redis, key: str, limit: int = 100) -> bool:
+    """Return ``True`` if the key is rate-limited (request should be rejected)."""
+    allowed = await redis.eval(FIXED_WINDOW_LUA, 1, key, limit)
     return allowed == 0
-
-

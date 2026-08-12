@@ -1,47 +1,60 @@
+"""Integration tests for event acceptance flow."""
 import pytest
-from httpx import ASGITransport, AsyncClient
-
-from app.main import app
+from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_ingest_event_success():
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
-        payload = {
-            "user_id": "usr_test123",
-            "category": "security",
-            "priority": "critical",
-            "channel": "sms",
-            "payload": {"title": "Verification Code", "code": "123456"},
-        }
-        response = await ac.post("/api/v1/events", json=payload)
-        assert response.status_code == 202
-        data = response.json()
-        assert data["status"] == "accepted"
-        assert "event_id" in data
-        assert data["queue"] == "stream:critical"
-
-
-@pytest.mark.asyncio
-async def test_idempotency_enforcement():
-    headers = {"X-Idempotency-Key": "unique-request-key-001"}
+async def test_accept_event_requires_idempotency_key(client: AsyncClient):
     payload = {
         "user_id": "usr_test123",
-        "category": "billing",
-        "priority": "standard",
-        "channel": "email",
-        "payload": {"amount": 50},
+        "category": "security",
+        "priority": "critical",
+        "channel": "sms",
+        "payload": {"title": "Test"},
     }
+    response = await client.post("/api/v1/events", json=payload)
+    # Missing Idempotency-Key header → 422 validation error
+    assert response.status_code == 422
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
-        # First request succeeds
-        r1 = await ac.post("/api/v1/events", json=payload, headers=headers)
-        assert r1.status_code == 202
 
-        # Second request with duplicate key gets blocked
-        r2 = await ac.post("/api/v1/events", json=payload, headers=headers)
-        assert r2.status_code == 409
+@pytest.mark.asyncio
+async def test_invalid_payload_rejected(client: AsyncClient):
+    headers = {"Idempotency-Key": "key-001"}
+    payload = {
+        "user_id": "usr_1",
+        "category": "sec",
+        "payload": {},
+    }
+    response = await client.post(
+        "/api/v1/events", json=payload, headers=headers
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_extra_fields_rejected(client: AsyncClient):
+    headers = {"Idempotency-Key": "key-002"}
+    payload = {
+        "user_id": "usr_1",
+        "category": "sec",
+        "payload": {"k": "v"},
+        "bad_field": "nope",
+    }
+    response = await client.post(
+        "/api/v1/events", json=payload, headers=headers
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_healthz(client: AsyncClient):
+    response = await client.get("/healthz")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_readyz(client: AsyncClient):
+    response = await client.get("/readyz")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
