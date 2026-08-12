@@ -1,5 +1,7 @@
 """Redis Stream operations — single source of truth for stream naming and I/O."""
+import json
 import uuid
+from typing import Any
 
 from redis.asyncio import Redis
 
@@ -26,13 +28,25 @@ async def push_event(
     /,
     *,
     user_id: str,
+    category: str,
     channel: str,
-    payload: str,
+    payload: dict[str, Any],
+    idempotency_key: str | None = None,
 ) -> str:
-    """Push a serialized event payload onto the correct Redis Stream.
+    """Push a complete event record onto the correct Redis Stream.
+
+    Includes idempotency guard (24h TTL) and ``retry_count: "0"`` for
+    the consumer-group retry loop.
 
     Returns the generated ``event_id``.
     """
+    if idempotency_key:
+        is_new = await redis.set(
+            f"idempotency:{idempotency_key}", "1", nx=True, ex=86400,
+        )
+        if not is_new:
+            raise ValueError(f"Duplicate idempotency key: {idempotency_key}")
+
     event_id = make_event_id()
     key = stream_name(priority)
     await redis.xadd(
@@ -40,8 +54,10 @@ async def push_event(
         {
             "event_id": event_id,
             "user_id": user_id,
+            "category": category,
             "channel": channel,
-            "payload": payload,
+            "payload": json.dumps(payload),
+            "retry_count": "0",
         },
     )
     return event_id

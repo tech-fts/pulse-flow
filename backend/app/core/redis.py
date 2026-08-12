@@ -23,3 +23,8 @@ async def get_redis_client() -> AsyncGenerator[Redis, None]:
         yield client
     finally:
         await client.aclose()  # type: ignore[attr-defined]
+
+
+async def get_redis() -> Redis:
+    """Direct Redis client for workers and non-Depends call sites."""
+    return Redis(connection_pool=_get_pool())
