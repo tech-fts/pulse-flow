@@ -1,6 +1,7 @@
 """Outbox relay — claims unpublished outbox rows and publishes them to Redis Streams."""
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 from redis.asyncio import Redis
 from sqlalchemy import select, update
@@ -41,7 +42,7 @@ async def relay_pending() -> int:
                 try:
                     await publish_outbox_event(redis, msg)
                     msg.published = True
-                    msg.published_at = None  # set by DB default; we just flush
+                    msg.published_at = datetime.now(timezone.utc)
                     published += 1
                 except Exception:
                     logger.exception(
@@ -51,7 +52,7 @@ async def relay_pending() -> int:
                     )
                     msg.attempt_count += 1
 
-            await session.commit()
+            # `session.begin()` commits on block exit; no explicit commit needed.
 
     return published
 

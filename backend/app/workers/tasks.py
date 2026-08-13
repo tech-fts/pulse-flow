@@ -35,7 +35,8 @@ from app.integrations.providers.base import (
     RetryableProviderError,
 )
 from app.integrations.providers.fake import FakeProvider
-from app.schemas.event import EventPriority
+from app.schemas.event import EventChannel, EventPriority
+from app.services.template_engine import render_notification
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,11 @@ async def process_one(
                 return
 
             provider = _providers.get(delivery.channel, _providers["fake"])
+            rendered = render_notification(
+                event.category,
+                EventChannel(delivery.channel),
+                event.payload,
+            )
             command = DeliveryCommand(
                 delivery_id=delivery.id,
                 event_id=event.id,
@@ -126,6 +132,8 @@ async def process_one(
                 user_id=event.user_id,
                 payload=event.payload,
                 attempt=delivery.attempt_count + 1,
+                title=rendered.title,
+                body=rendered.body,
             )
 
             try:

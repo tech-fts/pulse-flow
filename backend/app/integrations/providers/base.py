@@ -12,6 +12,8 @@ class DeliveryCommand:
     user_id: str
     payload: dict
     attempt: int
+    title: str | None = None
+    body: str = ""
 
 
 @dataclass(frozen=True)

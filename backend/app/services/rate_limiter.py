@@ -9,7 +9,7 @@ local current = tonumber(redis.call("GET", key) or "0")
 if current + 1 > limit then
     return 0
 else
-    redis.call("INCR", key, 1)
+    redis.call("INCRBY", key, 1)
     if current == 0 then
         redis.call("EXPIRE", key, 1) -- 1 second window
     end
