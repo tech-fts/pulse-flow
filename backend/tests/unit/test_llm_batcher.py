@@ -9,6 +9,7 @@ from app.workers.llm_batcher import (
     DigestAgent,
     DigestItem,
     buffer_event,
+    deliver_digest,
     flush_user,
 )
 
@@ -110,3 +111,44 @@ class TestDigestAgentFallback:
         first = DigestAgent._summarize_fallback(items)
         second = DigestAgent._summarize_fallback(items)
         assert first == second
+
+
+class TestDeliverDigest:
+    async def test_deliver_digest_persists_event_delivery_outbox(self, monkeypatch):
+        captured = []
+
+        class FakeSession:
+            def __init__(self):
+                self.added = []
+                self.committed = False
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            def add_all(self, objs):
+                self.added.extend(objs)
+
+            async def commit(self):
+                self.committed = True
+
+        def _factory():
+            s = FakeSession()
+            captured.append(s)
+            return s
+
+        monkeypatch.setattr("app.core.database.SessionLocal", _factory)
+
+        digest = DailyDigest(subject="Your daily digest", body="3 updates")
+        event_id = await deliver_digest("u1", digest)
+
+        assert event_id is not None
+        session = captured[0]
+        names = [type(o).__name__ for o in session.added]
+        assert names == ["Event", "Delivery", "OutboxMessage"]
+        event = session.added[0]
+        assert event.category == "digest"
+        assert event.payload == {"subject": "Your daily digest", "body": "3 updates"}
+        assert session.committed

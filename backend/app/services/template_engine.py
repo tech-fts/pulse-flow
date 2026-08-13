@@ -53,6 +53,10 @@ DEFAULT_TEMPLATES: dict[str, dict[str, str]] = {
         "title": "Reminder",
         "body": "{{ payload.get('message', 'You have a pending item.') }}",
     },
+    "digest": {
+        "title": "{{ payload.get('subject', 'Your daily digest') }}",
+        "body": "{{ payload.get('body', '') }}",
+    },
 }
 
 FALLBACK_TEMPLATE = (

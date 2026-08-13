@@ -80,3 +80,23 @@ async def test_readyz_unavailable_when_redis_down(
     response = await client.get("/readyz")
     assert response.status_code == 503
     assert response.json()["status"] == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_rate_limited_returns_429(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+):
+    async def _limited(redis, key, limit):
+        return True
+
+    monkeypatch.setattr("app.api.v1.events.check_rate_limit", _limited)
+    headers = {"Idempotency-Key": "key-rate-001"}
+    payload = {
+        "user_id": "usr_1",
+        "category": "security",
+        "priority": "critical",
+        "channel": "sms",
+        "payload": {"title": "Test"},
+    }
+    response = await client.post("/api/v1/events", json=payload, headers=headers)
+    assert response.status_code == 429

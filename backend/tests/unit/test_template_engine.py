@@ -60,6 +60,15 @@ class TestTemplateEngine:
         assert result.title == "Hi Ada"
         assert result.body == "Welcome!"
 
+    def test_digest_template_renders_subject_and_body(self):
+        result = render_notification(
+            "digest",
+            EventChannel.EMAIL,
+            {"subject": "Your daily digest", "body": "3 updates"},
+        )
+        assert result.title == "Your daily digest"
+        assert result.body == "3 updates"
+
     def test_fallback_template_reference(self):
         assert "payload" in FALLBACK_TEMPLATE
 

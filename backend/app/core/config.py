@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     REDIS_URL: SecretStr = SecretStr("redis://localhost:6379/0")
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
     MAX_REQUEST_BYTES: int = Field(default=1_048_576, ge=1024, le=10_485_760)
+    RATE_LIMIT_PER_SECOND: int = Field(default=100, ge=1)
     WORKER_CONSUMER_PREFIX: str = "dispatch-worker"
     EVENT_STREAM_MAXLEN: int = Field(default=100_000, ge=1000)
 

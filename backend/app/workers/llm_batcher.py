@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Protocol
 
@@ -177,6 +178,44 @@ async def flush_user(
     return digest
 
 
+async def deliver_digest(user_id: str, digest: DailyDigest) -> uuid.UUID | None:
+    """Persist a composed digest as an Event+Delivery+Outbox for immediate delivery.
+
+    The digest flows through the normal outbox → stream → worker path, where the
+    template engine renders the ``digest`` category into subject/body.
+    """
+    # Deferred imports keep this module importable without a live DB (unit tests).
+    from app.core.database import SessionLocal
+    from app.db.models import Delivery, DeliveryStatus, Event, OutboxMessage
+
+    event = Event(
+        id=uuid.uuid4(),
+        tenant_id="default",
+        user_id=user_id,
+        category="digest",
+        priority=EventPriority.STANDARD.value,
+        payload={"subject": digest.subject, "body": digest.body},
+    )
+    delivery = Delivery(
+        id=uuid.uuid4(),
+        event_id=event.id,
+        channel="email",
+        status=DeliveryStatus.PENDING,
+    )
+    outbox = OutboxMessage(
+        id=uuid.uuid4(),
+        event_id=event.id,
+        delivery_id=delivery.id,
+        stream_name=f"stream:{EventPriority.STANDARD.value}",
+    )
+
+    async with SessionLocal() as session:
+        session.add_all([event, delivery, outbox])
+        await session.commit()
+
+    return event.id
+
+
 async def flush_due_digests(redis: Redis, agent: DigestSummarizer) -> int:
     """Flush every user with buffered events for the current UTC day."""
     day = _day_key()
@@ -184,7 +223,9 @@ async def flush_due_digests(redis: Redis, agent: DigestSummarizer) -> int:
     flushed = 0
     for user_id in user_ids:
         uid = user_id.decode() if isinstance(user_id, bytes) else user_id
-        if await flush_user(redis, agent, uid, day) is not None:
+        digest = await flush_user(redis, agent, uid, day)
+        if digest is not None:
+            await deliver_digest(uid, digest)
             flushed += 1
     return flushed
 
