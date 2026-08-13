@@ -81,6 +81,9 @@ class OutboxMessage(Base):
 
 class IdempotencyKey(Base):
     __tablename__ = "idempotency_keys"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "key", name="uq_idempotency_tenant_key"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
