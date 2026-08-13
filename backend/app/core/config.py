@@ -15,8 +15,10 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "PulseFlow"
     API_V1_STR: str = "/api/v1"
 
-    DATABASE_URL: SecretStr
-    REDIS_URL: SecretStr
+    DATABASE_URL: SecretStr = SecretStr(
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
+    )
+    REDIS_URL: SecretStr = SecretStr("redis://localhost:6379/0")
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
     MAX_REQUEST_BYTES: int = Field(default=1_048_576, ge=1024, le=10_485_760)
     WORKER_CONSUMER_PREFIX: str = "dispatch-worker"
@@ -29,6 +31,10 @@ class Settings(BaseSettings):
         if self.ENVIRONMENT == Environment.PRODUCTION:
             if not self.CORS_ORIGINS or "*" in self.CORS_ORIGINS:
                 raise ValueError("Use explicit CORS origins in production")
+            if "postgres:postgres" in self.DATABASE_URL.get_secret_value():
+                raise ValueError("DATABASE_URL must use real credentials in production")
+            if "localhost" in self.REDIS_URL.get_secret_value():
+                raise ValueError("REDIS_URL must use real host in production")
         return self
 
 

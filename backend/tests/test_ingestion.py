@@ -54,7 +54,29 @@ async def test_healthz(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_readyz(client: AsyncClient):
+async def test_readyz(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    async def _ok() -> bool:
+        return True
+
+    monkeypatch.setattr("app.main._redis_ready", _ok)
+    monkeypatch.setattr("app.main._database_ready", _ok)
     response = await client.get("/readyz")
     assert response.status_code == 200
     assert response.json()["status"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_readyz_unavailable_when_redis_down(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+):
+    async def _redis_down() -> bool:
+        return False
+
+    async def _db_ok() -> bool:
+        return True
+
+    monkeypatch.setattr("app.main._redis_ready", _redis_down)
+    monkeypatch.setattr("app.main._database_ready", _db_ok)
+    response = await client.get("/readyz")
+    assert response.status_code == 503
+    assert response.json()["status"] == "unavailable"
