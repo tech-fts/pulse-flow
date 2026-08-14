@@ -15,6 +15,9 @@
     "esModuleInterop": true,
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "isolatedModules": true,
     "jsx": "react-jsx",
     "plugins": [
